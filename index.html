@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>綠底字幕機</title>
+  <style>
+    /* 全局樣式設定：清除預設邊距，設定高度為 100%，並使用綠幕專用色作為背景 */
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      min-height: 100vh;
+      background: #19B25C;
+      /* Chroma Key 綠色，適合去背 */
+      box-sizing: border-box;
+      overflow-x: hidden;
+      /* 防止水平捲動 */
+      overflow-y: hidden;
+      /* 防止垂直捲動，讓畫面保持乾淨 */
+    }
+
+    /* 字幕面板的外部容器，固定於畫面底部 */
+    .subtitle-panel {
+      position: fixed;
+      left: 0;
+      bottom: 0;
+      width: 100vw;
+      max-width: 100vw;
+      height: 0;
+      /* 高度為 0 是因為內容已經靠 bottom 對齊定位 */
+      pointer-events: none;
+      /* 預設不攔截滑鼠點擊 */
+      z-index: 10;
+    }
+
+    /* 真正用來呈現字幕的區域，採用絕對定位將其放置在面板內 */
+    .subtitles {
+      position: absolute;
+      left: 0;
+      bottom: 1.5vw;
+      /* 距離底部的間距 */
+      width: 100vw;
+      max-width: 100vw;
+      overflow: visible;
+      text-align: center;
+      /* 讓文字置中對齊 */
+      font-family: 'DFKai-sb', '標楷體', 'Times New Roman', serif;
+      /* 預設使用標楷體 */
+      font-size: 5.0vw;
+      line-height: 1.35;
+      user-select: none;
+      /* 防止使用者反白選取文字 */
+      pointer-events: none;
+      /* 讓點擊事件可以穿透 */
+    }
+
+    /* 單行字幕的樣式設定，包含文字陰影與排版 */
+    .subtitle-line {
+      color: #fff;
+      /* 字體顏色：白色 */
+      /* 加上厚重的黑色邊框與陰影，在綠幕上對比度更高，去背更乾淨 */
+      text-shadow:
+        0 0 4px black,
+        2px 2px 4px black,
+        -2px -2px 4px black,
+        2px -2px 4px black,
+        -2px 2px 4px black;
+      margin: 0 0.25rem;
+      padding: 0;
+      background: transparent;
+      position: relative;
+      z-index: 1;
+      transition: font-size 0.15s;
+      /* 縮放字體時的平滑轉場效果 */
+      min-height: 1.2em;
+      /* 維持行高，避免空行時高度塌陷 */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* 特殊樣式：留給空行使用的背景 (目前未啟用) */
+    .empty-line {
+      background: rgba(255, 255, 255, 0.25);
+      color: transparent;
+    }
+
+    /* 設定面板外觀：置中並帶有圓角與半透明深綠色背景 */
+    .subtitle-config {
+      position: absolute;
+      top: 2vw;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(34, 50, 34, 0.85);
+      /* 半透明暗綠色背景 */
+      border-radius: 16px;
+      padding: 1.5vw 2vw 0.8vw 2vw;
+      box-shadow: 0 4px 20px #555b;
+      z-index: 99;
+      /* 確保設定面板在最上層 */
+      display: flex;
+      /* 使用 flex 排版，讓內部元素垂直排列 */
+      flex-direction: column;
+      align-items: center;
+      max-width: 600px;
+      width: 90vw;
+    }
+
+    /* 文字輸入框樣式設定 */
+    .subtitle-config textarea {
+      width: 100%;
+      font-size: 1.4vw;
+      font-family: '標楷體', 'DFKai-sb', 'Times New Roman', serif;
+      padding: 1vw;
+      border-radius: 8px;
+      border: 1px solid #bbb;
+      margin-bottom: 12px;
+      resize: vertical;
+      /* 只允許垂直調整高度 */
+      box-sizing: border-box;
+      min-height: 12vw;
+      /* 最小高度約為10行 */
+      line-height: 1.2em;
+    }
+
+    /* 「開始」按鈕樣式設定 */
+    .subtitle-config button {
+      font-size: 1.2vw;
+      border: none;
+      background: #193eb2;
+      color: #fff;
+      padding: 0.7vw 2.5vw;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      margin-bottom: 8px;
+      box-shadow: 0px 2px 8px #2224;
+      transition: background 0.2s;
+      /* 懸停時的轉場效果 */
+    }
+
+    /* 「開始」按鈕懸停時的效果 */
+    .subtitle-config button:hover {
+      background: #197ab2;
+    }
+
+    /* 熱鍵操作說明的面板樣式 */
+    .hotkey-desc {
+      color: #dfd;
+      font-size: 0.9vw;
+      line-height: 1;
+      background: rgba(25, 178, 92, 0.13);
+      /* 微綠色底底 */
+      border-radius: 7px;
+      padding: 8px 14px;
+      box-shadow: 0 1px 5px #3336;
+      width: 100%;
+      max-width: 600px;
+      text-align: left;
+      font-family: "Microsoft JhengHei", Arial, sans-serif;
+      /* 說明文字使用微軟正黑體 */
+      white-space: pre-wrap;
+      margin: 0;
+      pointer-events: none;
+      /* 防止設定說明被反白或點選 */
+    }
+
+    /* RWD: 當螢幕寬度小於 600px (如手機) 時的樣式調整 */
+    @media (max-width: 600px) {
+      .subtitle-config textarea {
+        font-size: 3vw;
+        min-height: 24vw;
+      }
+
+      .subtitle-config button {
+        font-size: 3vw;
+        padding: 2vw 8vw;
+      }
+
+      .hotkey-desc {
+        font-size: 3vw;
+        padding: 2vw 3vw;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 設定面板：包含輸入文字框、開始按鈕與操作說明 -->
+  <div class="subtitle-config" id="subtitleConfig">
+    <textarea id="subtitleInput" placeholder="請一行一行輸入字幕..." rows="10"></textarea>
+    <button id="startBtn">開始播放</button>
+    <div class="hotkey-desc">
+      特殊文字說明：用 <code>` `</code> 符號包覆起來的文字會變成橘紅色。<br><br>
+      熱鍵操作：<br>
+      ↑ / PageUp ：切換【上一行】字幕<br>
+      ↓ / PageDown / 空白鍵 / Enter：切換【下一行】字幕<br>
+      滑鼠左鍵點擊畫面【左半邊】：切換【上一行】字幕<br>
+      滑鼠左鍵點擊畫面【右半邊】：切換【下一行】字幕<br>
+      + / - ：字體放大／縮小<br>
+      Q ：結束播放 + 退出全螢幕，返回設定畫面<br>
+      Esc / F11：瀏覽器原生行為（退出／切換全螢幕）<br><br>
+      v1.0 　2026-03-20
+    </div>
+  </div>
+
+  <!-- 字幕顯示面板：播放字幕時才會真正呈現在畫面上 -->
+  <div class="subtitle-panel">
+    <div class="subtitles" id="subtitlesArea"></div>
+  </div>
+
+  <script>
+    // 定義應用程式執行時的狀態變數
+    let subtitles = [];  // 儲存所有字幕內容的字串陣列
+    let pos = 0;         // 目前播放到的字幕行數索引 (從 0 開始)
+    let fontSize = 5.0;  // 目前的字幕字體大小 (單位為 vw)
+
+    // 取得畫面上各個重要元素的 DOM 節點
+    const configPanel = document.getElementById('subtitleConfig');
+    const textarea = document.getElementById('subtitleInput');
+    const startBtn = document.getElementById('startBtn');
+    const area = document.getElementById('subtitlesArea');
+
+    // === 實用功能：網頁載入時自動讀取 LocalStorage 中的暫存字幕 ===
+    const savedSubtitles = localStorage.getItem('green_screen_subtitles');
+    if (savedSubtitles) {
+      textarea.value = savedSubtitles; // 將上次儲存的字幕內容放回輸入框
+    }
+
+    /**
+     * 負責渲染目前那一行的字幕內容到畫面上
+     * 包含特殊語法（以反引號 ` 包覆）轉橘紅色字體的過濾邏輯
+     */
+    function renderSubtitles() {
+      // 先清空原本字幕區塊的內容
+      area.innerHTML = '';
+
+      // 取得目前應該呈現的字幕文字。如果尚未輸入或超過陣列範圍則為空字串。
+      let curr = subtitles[pos] || '';
+
+      // 建立一個對應此行字幕的 div 容器
+      let div = document.createElement('div');
+      div.className = 'subtitle-line';
+      div.style.fontSize = fontSize + 'vw'; // 套用目前的字體大小
+
+      // 切割字串，比對規則：將用 ` 包覆的文字獨立成陣列元素
+      // 原理：正規表達式 (/(`[^`]+`)/g) 代表以反引號開始，中間不包含反引號，最後以反引號結束的字串
+      const parts = curr.split(/(`[^`]+`)/g);
+
+      // 迭代切割後的每一個字串片段
+      parts.forEach(part => {
+        // 如果是特殊的語法（以反引號包覆的片段）
+        if (/^`[^`]+`$/.test(part)) {
+          // 去除頭尾的反引號
+          let specialText = part.slice(1, -1);
+          // 建立一個 span 放入特殊文字，並設定為橘紅色
+          let span = document.createElement('span');
+          span.style.color = '#FF4500';
+          span.textContent = specialText;
+          div.appendChild(span);
+        } else {
+          // 如果是一般文字，直接建立預設樣式的 span 放入文字
+          let span = document.createElement('span');
+          span.textContent = part; // 使用 textContent 可以預防 XSS 跨站腳本攻擊
+          div.appendChild(span);
+        }
+      });
+
+      // 將組合好的行容器加到字幕呈現面板中
+      area.appendChild(div);
+    }
+
+    /**
+     * 「開始」按鈕點擊事件處理
+     * 將使用者輸入的多行文字轉換成陣列，隱藏設定視窗，並開始顯示第一行字幕
+     */
+    startBtn.onclick = function () {
+      // === 實用功能：儲存目前輸入的內容到 LocalStorage，防止當機或重整遺失 ===
+      localStorage.setItem('green_screen_subtitles', textarea.value);
+
+      // === 全螢幕觸發：如果目前不在全螢幕模式，則自動進入全螢幕 ===
+      // document.fullscreenElement 為 null 表示目前尚未全螢幕
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(function (err) {
+          // 若瀏覽器拒絕（例如安全性限制），僅靜默忽略，不影響字幕正常播放
+          console.warn('無法進入全螢幕：', err.message);
+        });
+      }
+
+      // 取得輸入值，移除 carriage return (\r)，並以換行符號 (\n) 切割成陣列
+      // 使用 .trimEnd() 確保最後不會切出多餘的空行
+      const rawText = textarea.value.replace(/\r/g, '').trimEnd();
+      if (!rawText) return; // 如果沒有輸入內容，則無效，不執行
+
+      subtitles = rawText.split('\n');
+
+      // 可以選擇把每一行前後多餘的半形空白去除，避免排版偏斜
+      // subtitles = subtitles.map(line => line.trim()); (註：此處保留設計，讓使用者可運用空白推擠排版)
+
+      pos = 0; // 重置播放進度至第一行
+
+      // 隱藏設定面板
+      configPanel.style.display = 'none';
+
+      // 重新渲染畫面
+      renderSubtitles();
+
+      // 讓 textarea 失去焦點，避免後續鍵盤操作不小心在其中留下輸入
+      textarea.blur();
+
+      // 開放點擊事件 (主要是為了讓點擊畫面切換上/下行的功能生效)
+      area.style.pointerEvents = 'auto';
+    };
+
+    /**
+     * 為了避免在打字到一半時網頁不小心關閉，也可以即時儲存進 localStorage
+     */
+    textarea.addEventListener('input', function () {
+      localStorage.setItem('green_screen_subtitles', textarea.value);
+    });
+
+    /**
+     * 監聽上一行事件的專用函式
+     * 防止已經在第一行時還不斷重新渲染
+     */
+    function prevSubtitle() {
+      if (pos > 0) {
+        pos--;
+        renderSubtitles();
+      }
+    }
+
+    /**
+     * 監聽下一行事件的專用函式
+     * 防止已經在最後一行時還不斷重新渲染
+     */
+    function nextSubtitle() {
+      if (pos < subtitles.length - 1) {
+        pos++;
+        renderSubtitles();
+      }
+    }
+
+    /**
+     * 整體視窗的鍵盤按下事件監聽器
+     * 以便使用者能透過快捷鍵操作字幕系統
+     */
+    window.addEventListener('keydown', function (e) {
+      // 所有快捷鍵只在播放模式下有效
+      if (configPanel.style.display === 'none') {
+
+        switch (e.key) {
+          case 'ArrowUp':
+          case 'PageUp':
+            // 往上一行
+            prevSubtitle();
+            e.preventDefault(); // 防止網頁預設滾動行為
+            break;
+
+          case 'ArrowDown':
+          case 'PageDown':
+          case ' ':      // 空白鍵
+          case 'Enter':  // Enter 鍵
+            // 往下一行
+            nextSubtitle();
+            e.preventDefault(); // 防止網頁預設滾動行為
+            break;
+
+          case 'q':
+          case 'Q':
+            // 結束全螢幕（如果有）＋結束播放，返回設定畫面
+            if (document.fullscreenElement) {
+              document.exitFullscreen().catch(function (err) {
+                console.warn('無法退出全螢幕：', err.message);
+              });
+            }
+            configPanel.style.display = 'flex';
+            area.innerHTML = '';
+            area.style.pointerEvents = 'none';
+            break;
+
+          case '+':
+          case '=':
+            // 字體放大 (最大限制為 8vw)
+            fontSize = Math.min(fontSize + 0.2, 8);
+            renderSubtitles();
+            break;
+
+          case '-':
+            // 字體縮小 (最小限制為 1.2vw)
+            fontSize = Math.max(fontSize - 0.2, 1.2);
+            renderSubtitles();
+            break;
+        }
+      }
+    });
+
+    /**
+     * 滑鼠/觸控點擊畫面的事件監聽器
+     * 判斷點擊落於螢幕的左半邊或右半邊，分別觸發上一行與下一行
+     */
+    window.addEventListener('mousedown', function (e) {
+      // 確保只在字幕模式下執行，並且這並不是點擊了 UI 按鈕 (例如開始按鈕)
+      if (configPanel.style.display === 'none') {
+
+        // 取得視窗的寬度中心點
+        const centerX = window.innerWidth / 2;
+
+        // 如果滑鼠 X 座標大於中心點 (即點擊螢幕右半邊)
+        if (e.clientX > centerX) {
+          nextSubtitle(); // 切換到下一行
+        } else {
+          // 如果點擊螢幕左半邊
+          prevSubtitle(); // 切換到上一行
+        }
+      }
+    });
+  </script>
+</body>
+
+</html>
